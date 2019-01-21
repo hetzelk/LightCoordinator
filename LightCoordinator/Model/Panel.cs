@@ -14,11 +14,11 @@ namespace LightCoordinator.Model
         public int x { get; set; }
         public int y { get; set; }
         public int o { get; set; }
-        private Color color;
-        public Color previousColor { get; set; }
+        private LCColor color;
+        public LCColor previousColor { get; set; }
         public int[] partnerIds { get; set; }
 
-        public Color Color
+        public LCColor Color
         {
             get
             {
@@ -60,6 +60,23 @@ namespace LightCoordinator.Model
             }
 
             return panels;
+        }
+
+        public static List<Panel> Shuffle(List<Panel> panels)
+        {
+            List<Panel> newOrder = new List<Panel>();
+            Random random = new Random();
+
+            while (newOrder.Count != panels.Count)
+            {
+                int i = random.Next(0, panels.Count);
+                if (!newOrder.Contains(panels[i]))
+                {
+                    newOrder.Add(panels[i]);
+                }
+            }
+
+            return newOrder;
         }
     }
 }

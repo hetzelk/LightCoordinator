@@ -54,9 +54,11 @@
     <Compile Include="Extensions\JsonEx.cs" />
     <Compile Include="Extensions\RandomEx.cs" />
     <Compile Include="ImageAnalysis.cs" />
+    <Compile Include="LayoutController.cs" />
     <Compile Include="LightController.cs" />
     <Compile Include="Mode.cs" />
     <Compile Include="Model\LCColor.cs" />
+    <Compile Include="Extensions\Log.cs" />
     <Compile Include="Model\Nanoleaf.cs" />
     <Compile Include="Model\Panel.cs" />
     <Compile Include="PaletteController.cs" />

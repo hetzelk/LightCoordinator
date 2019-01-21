@@ -8,11 +8,44 @@ using System.Drawing;
 using Newtonsoft.Json.Linq;
 using System.Windows.Forms;
 using LightCoordinator.Model;
+using LightCoordinator.Extensions;
 
 namespace LightCoordinator
 {
     public static class ImageAnalysis
     {
+        public static Tuple<int, int> DivideScreen(int total)
+        {
+            int rows = 1;
+            int columns = 1;
+            bool satisfied = false;
+
+            bool toggle = true;
+            while (!satisfied)
+            {
+                if (rows * columns >= total)
+                {
+                    satisfied = true;
+                    break;
+                }
+                else
+                {
+                    if (toggle)
+                    {
+                        rows += 1;
+                        toggle = false;
+                    }
+                    else
+                    {
+                        columns += 1;
+                        toggle = true;
+                    }
+                }
+            }
+
+            return new Tuple<int, int>(rows, columns);
+        }
+
         public static Bitmap createBitMap(string filepath)
         {
             Bitmap bMap = Bitmap.FromFile(filepath) as Bitmap;
@@ -26,7 +59,8 @@ namespace LightCoordinator
         {
             //int the future figure out how to easily change screens
             List<Screen> screens = Screen.AllScreens.ToList();
-            Screen screen = screens.Where(x => x.Bounds.X == 0).First();
+            //Screen screen = screens.Where(x => x.Bounds.X == 0).First();
+            Screen screen = screens[screenNumber];
 
             Point point = new Point(screen.WorkingArea.X, screen.WorkingArea.Y);
             Rectangle bounds = Screen.GetBounds(point);
@@ -48,11 +82,10 @@ namespace LightCoordinator
             return bitmap;
         }
 
-        public static Tuple<Dictionary<int, int>, int> GetAllColors(Bitmap image)
+        public static Tuple<Dictionary<int, int>, int> GetAllColors(Bitmap image, int pixelJump=5)
         {
             Dictionary<int, int> allPixels = new Dictionary<int, int>();
-
-            int pixelJump = 10;
+            
             decimal totalPixels = 0;
 
             for (int row = 0; row < image.Size.Width;)
@@ -78,19 +111,21 @@ namespace LightCoordinator
             return Tuple.Create<Dictionary<int, int>, int>(allPixels.OrderByDescending(x => x.Value).ToDictionary(x => x.Key, x => x.Value), Convert.ToInt32(totalPixels));
         }
 
-        public static List<Color> GetChunkColors(Bitmap image, int chunkSize, int pixelJump, int x, int y, int width, int height)
+        //TODO: if the screen has not changed and the colors don't change, don't send an update
+        //TODO: When creating a palette from the screen, add a color.2 that can be used, when colors are being mirrored the second color can be used to change it up
+        public static List<LCColor> GetChunkColors(Bitmap image, int rowSize, int columnSize, int x, int y, int width, int height, int pixelJump=10)
         {
-            List<Color> pixels = new List<Color>();
+            List<LCColor> pixels = new List<LCColor>();
             int currentRow = x;
             int currentColumn = y;
             int rowCount = 0;
             int columnCount = 0;
 
-            while (columnCount < chunkSize)
+            while (columnCount < columnSize)
             {
                 if (currentColumn < height)
                 {
-                    while (rowCount < chunkSize)
+                    while (rowCount < rowSize)
                     {
                         if (currentRow < width)
                         {
@@ -98,11 +133,11 @@ namespace LightCoordinator
                             {
                                 int pixelColor = image.GetPixel(currentRow, currentColumn).ToArgb();
                                 /*new LCColor(Color.FromArgb(pixelColor))*/;
-                                pixels.Add(Color.FromArgb(pixelColor));
+                                pixels.Add(new LCColor(Color.FromArgb(pixelColor)));
                             }
                             catch (Exception e)
                             {
-                                Console.Write("");
+                                Log.Write(e.ToString());
                             }
 
                             rowCount += pixelJump;
@@ -127,58 +162,60 @@ namespace LightCoordinator
             return pixels;
         }
 
-        public static List<Color> GetAverageColors(Bitmap image)
+        public static List<LCColor> GetAverageColors(Bitmap image, int rows, int columns, int borderReduction = 0)
         {
-            List<Color> averageColors = new List<Color>();
-            List<List<Color>> chunks = new List<List<Color>>();
+            List<LCColor> averageColors = new List<LCColor>();
+            List<List<LCColor>> chunks = new List<List<LCColor>>();
 
-            int width = image.Size.Width;
-            int height = image.Size.Height;
+            //this will reduce the border on every side by X pixels
+            int width = image.Size.Width - borderReduction;
+            int height = image.Size.Height - borderReduction;
 
-            int chunkSize = 100;
+            int rowSize = width / rows;
+            int columnSize = height / columns;
 
-            int currentRow = 0;
-            int currentColumn = 0;
+            int currentRow = borderReduction;
+            int currentColumn = borderReduction;
 
             List<int> currentRowPixels = new List<int>();
             while (currentColumn < height)
             {
-                currentRow = 0;
+                currentRow = borderReduction;
                 while (currentRow < width)
                 {
-                    chunks.Add(GetChunkColors(image, chunkSize, 5, currentRow, currentColumn, width, height));
-                    currentRow += chunkSize;
+                    chunks.Add(GetChunkColors(image, rowSize, columnSize, currentRow, currentColumn, width, height, pixelJump: 5));
+                    currentRow += rowSize;
                 }
-                currentColumn += chunkSize;
+                currentColumn += columnSize;
             }
 
-            foreach (List<Color> chunk in chunks)
+            foreach (List<LCColor> chunk in chunks)
             {
                 double r = 0;
                 double g = 0;
                 double b = 0;
 
-                foreach (Color color in chunk)
+                foreach (LCColor color in chunk)
                 {
-                    r += color.R;
-                    g += color.G;
-                    b += color.B;
+                    r += color.r;
+                    g += color.g;
+                    b += color.b;
                 }
 
                 r = Math.Round(r / chunk.Count);
                 g = Math.Round(g / chunk.Count);
                 b = Math.Round(b / chunk.Count);
 
-                Color averageColor = Color.FromArgb(Convert.ToInt32(r), Convert.ToInt32(g), Convert.ToInt32(b));
+                LCColor averageColor = new LCColor(Color.FromArgb(Convert.ToInt32(r), Convert.ToInt32(g), Convert.ToInt32(b)));
                 averageColors.Add(averageColor);
             }
 
             return averageColors;
         }
 
-        public static List<Color> ReduceColors(List<Color> colors, bool allowDuplicates, int total)
+        public static List<LCColor> ReduceColors(List<LCColor> colors, bool allowDuplicates, int total)
         {
-            List<Color> finalColors = new List<Color>();
+            List<LCColor> finalColors = new List<LCColor>();
             Random random = new Random();
             int attempts = 0;
 
@@ -203,14 +240,14 @@ namespace LightCoordinator
             return finalColors;
         }
 
-        public static List<Color> GetColorsFromImage(Bitmap image, int count)
+        public static List<LCColor> GetColorsFromImage(Bitmap image, int count)
         {
             var colorTuple = GetAllColors(image);
 
             Dictionary<int, int> pixelsHighToLow = colorTuple.Item1;
             int totalPixels = colorTuple.Item2;
 
-            List<Color> mostUsedColors = new List<Color>();
+            List<LCColor> mostUsedColors = new List<LCColor>();
 
             decimal numberOfGroups = 4;
             int counter = 0;
@@ -236,8 +273,8 @@ namespace LightCoordinator
 
                         timesToAdd = Math.Max((percent * 20) / 100, 1);
 
-                        Color color = Color.FromArgb(kvp.Key);
-                        if ((color.R == 0 && color.G == 0 && color.B == 0 && addBlack) || percent > 50)
+                        LCColor color = new LCColor(Color.FromArgb(kvp.Key));
+                        if ((color.r == 0 && color.g == 0 && color.b == 0 && addBlack) || percent > 50)
                         {
                             mostUsedColors.AddToList(color, timesToAdd);
                             addBlack = false;
@@ -258,13 +295,13 @@ namespace LightCoordinator
 
             if (mostUsedColors.Count == 0)
             {
-                mostUsedColors.Add(Color.Black);
+                mostUsedColors.Add(new LCColor(Color.Black));
             }
 
             return mostUsedColors;
         }
 
-        public static void AddToList(this List<Color> colors, Color color, int timesToAdd)
+        public static void AddToList(this List<LCColor> colors, LCColor color, int timesToAdd)
         {
             while (timesToAdd > 0)
             {

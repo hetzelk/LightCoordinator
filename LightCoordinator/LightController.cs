@@ -24,6 +24,51 @@ namespace LightCoordinator
 
         }
 
+        public void PairLights()
+        {
+
+        }
+
+        public Nanoleaf SelectCorrectLight(Nanoleaf nanoleaf)
+        {
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
+
+            WebRequest request = WebRequest.Create(nanoleaf.url + "/new");
+            request.ContentType = "application/json";
+            request.Method = "POST";
+
+            try
+            {
+                using (var response = (HttpWebResponse)request.GetResponse())
+                {
+                    if (response.StatusCode != HttpStatusCode.OK)
+                    {
+                        Log.Error("Sync response failed");
+                        return null;
+                    }
+                    else
+                    {
+                        WebHeaderCollection header = response.Headers;
+
+                        var encoding = ASCIIEncoding.ASCII;
+                        string body = "";
+                        using (var reader = new StreamReader(response.GetResponseStream(), encoding))
+                        {
+                            body = reader.ReadToEnd();
+                            nanoleaf.auth_token = JObject.Parse(body)["auth_token"].ToString();
+                            return nanoleaf;
+                        }
+                    }
+                }
+            }
+            catch(Exception e)
+            {
+                Log.Error(e.ToString());
+                return null;
+            }
+        }
+
         public Dictionary<string, string> Get(Nanoleaf nanoleaf, string url_ex)
         {
             Stopwatch watch = new Stopwatch();
@@ -213,7 +258,7 @@ namespace LightCoordinator
             return SetState(nanoleaf, settings, 1000);
         }
 
-        public Tuple<string, string> CreateCustom(Nanoleaf nanoleaf, JArray palette, int transMin, int transMax, string animType = "flow")
+        public Tuple<string, string> CreateCustom(Nanoleaf nanoleaf, JArray palette, int transMin=5, int transMax=5, string animType = "flow")
         {
             dynamic write = new JObject();
             write.command = "display";
@@ -260,7 +305,7 @@ namespace LightCoordinator
             return new Tuple<string, string>(url_ex, jsonObject.ToString(Formatting.None));
         }
 
-        public Tuple<string, string> CreateTemp(Nanoleaf nanoleaf, List<Panel> panels, List<Color> colors)
+        public Tuple<string, string> CreateTemp(Nanoleaf nanoleaf, List<Panel> panels, List<LCColor> colors)
         {
             dynamic write = new JObject();
             write.command = "display";
@@ -269,11 +314,11 @@ namespace LightCoordinator
             string animData = String.Format("{0} ", panels.Count);
             int indexer = 0;
 
-            foreach (Color rgb in colors)
+            foreach (LCColor color in colors)
             {
-                panels[indexer].Color = rgb;
+                panels[indexer].Color = color;
                 //string format is the panelId, frame, rgbwt string
-                animData += String.Format("{0} {1} {2} ", panels[indexer].panelId, 1, new LCColor(rgb).RGBWT);
+                animData += String.Format("{0} {1} {2} ", panels[indexer].panelId, 10, color.RGBWT);
                 indexer += 1;
             }
 

@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using LightCoordinator.Model;
+using LightCoordinator.Extensions;
 
 namespace LightCoordinator
 {
@@ -25,7 +26,7 @@ namespace LightCoordinator
             switch (mode)
             {
                 case 1:
-                    Testing(nanoleaf);
+                    Screenshot(nanoleaf);
                     break;
                 case 2:
                     MimickAverage(nanoleaf);
@@ -39,15 +40,38 @@ namespace LightCoordinator
                 case 5:
                     StreamingMode(nanoleaf);
                     break;
+                case 6:
+                    FrameMode(nanoleaf);
+                    break;
                 default:
-                    Testing(nanoleaf);
+                    Screenshot(nanoleaf);
                     break;
             }
         }
 
-        public void Testing(Nanoleaf nanoleaf)
+        public void Screenshot(Nanoleaf nanoleaf)
         {
+            List<LCColor> palette = null;
+            Bitmap bitmap = null;
+            string body = lightController.Get(nanoleaf, "/panelLayout/layout")["body"];
+            List<Panel> panels = Panel.GetPanels(body);
+            int paletteCount = panels.Count;
+            Tuple<int, int> gcd = ImageAnalysis.DivideScreen(paletteCount);
 
+            palette = new List<LCColor>();
+            bitmap = ImageAnalysis.CaptureBitmap(0);
+
+            if (bitmap == null)
+            {
+                palette.Add(new LCColor(Color.Black));
+            }
+            else
+            {
+                //palette = ImageAnalysis.ReduceColors(ImageAnalysis.GetAverageColors(bitmap, gcd.Item1, gcd.Item2), true, paletteCount);
+                palette = ImageAnalysis.GetAverageColors(bitmap, gcd.Item1, gcd.Item2, borderReduction: 300);
+            }
+
+            lightController.CreateCustom(nanoleaf, PaletteController.ToJArray(palette));
         }
 
         public long ConvertIP(string addr)
@@ -56,6 +80,13 @@ namespace LightCoordinator
             // unsigned NetworkToHostOrder ought to be provided.
             return (long)(uint)IPAddress.NetworkToHostOrder(
                  (int)IPAddress.Parse(addr).Address);
+        }
+
+        public void FrameMode(Nanoleaf nanoleaf)
+        {
+            string body = lightController.Get(nanoleaf, "/panelLayout/layout")["body"];
+            List<Panel> panels = Panel.GetPanels(body);
+            int paletteCount = panels.Count;
         }
 
         public void StreamingMode(Nanoleaf nanoleaf)
@@ -72,42 +103,52 @@ namespace LightCoordinator
             bool first = true;
             string body = lightController.Get(nanoleaf, "/panelLayout/layout")["body"];
             List<Panel> panels = Panel.GetPanels(body);
-
-            List<Color> palette = null;
+            
+            List<LCColor> palette = null;
             Stopwatch timer = null;
             Bitmap bitmap = null;
+
+            int paletteCount = panels.Count;
+            Tuple<int, int> gcd = ImageAnalysis.DivideScreen(paletteCount);
 
             while (true)
             {
                 timer = new Stopwatch();
                 timer.Start();
 
-                palette = new List<Color>();
-                bitmap = ImageAnalysis.CaptureBitmap(1);
+                palette = new List<LCColor>();
+                bitmap = ImageAnalysis.CaptureBitmap(0);
 
                 if (bitmap == null)
                 {
-                    palette.Add(Color.Black);
+                    palette.Add(new LCColor(Color.Black));
                 }
                 else
                 {
-                    int paletteCount = panels.Count;
-                    palette = ImageAnalysis.ReduceColors(ImageAnalysis.GetAverageColors(bitmap), true, paletteCount);
+                    //palette = ImageAnalysis.ReduceColors(ImageAnalysis.GetAverageColors(bitmap, gcd.Item1, gcd.Item2), true, paletteCount);
+                    palette = ImageAnalysis.GetAverageColors(bitmap, gcd.Item1, gcd.Item2, borderReduction: 300);
+                }
+                
+                if (timer.ElapsedMilliseconds < 100)
+                {
+                    if (100 - timer.ElapsedMilliseconds > 0)
+                    {
+                        Thread.Sleep(100 - Convert.ToInt32(timer.ElapsedMilliseconds));
+                    }
                 }
 
-                timer.Stop();
-                long ms = timer.ElapsedMilliseconds;
-                if (ms < 100)
+                //TODO: change the position of some of the panels on shuffle, not all
+                bool shuffle = true;
+                if (shuffle && times.Count % 100 == 0)
                 {
-                    Thread.Sleep(50);
+                    panels = Panel.Shuffle(panels);
                 }
-                timer.Start();
 
                 lightController.CreateTemp(nanoleaf, panels, palette);
 
                 timer.Stop();
-                ms = timer.ElapsedMilliseconds;
-                
+                long ms = timer.ElapsedMilliseconds;
+
                 if (!first)
                 {
                     CalcAverage(ms);
@@ -135,11 +176,12 @@ namespace LightCoordinator
                 else
                 {
                     int paletteCount = 12;
-                    var averages = ImageAnalysis.ReduceColors(ImageAnalysis.GetAverageColors(bitmap), true, paletteCount);
-                    
-                    foreach (Color color in averages)
+                    var averages = ImageAnalysis.ReduceColors(ImageAnalysis.GetAverageColors(bitmap, 1, 1), true, paletteCount);
+                    throw new Exception();
+
+                    foreach (LCColor color in averages)
                     {
-                        palette.Add(new LCColor("rgb", color.R, color.G, color.B).RGBJO);
+                        palette.Add(new LCColor("rgb", color.r, color.g, color.b).RGBJO);
                     }
                 }
 
@@ -171,9 +213,9 @@ namespace LightCoordinator
                     var mostUsed = ImageAnalysis.GetColorsFromImage(bitmap, paletteCount);
 
                     JArray palette = new JArray();
-                    foreach (Color color in mostUsed)
+                    foreach (LCColor color in mostUsed)
                     {
-                        LCColor lcc = new LCColor("rgb", color.R, color.G, color.B);
+                        LCColor lcc = new LCColor("rgb", color.r, color.g, color.b);
                         palette.Add(lcc);
                     }
 
@@ -198,9 +240,9 @@ namespace LightCoordinator
             {
                 double average = averages.Average();
 
-                Console.WriteLine("Updates: {0}", times.Count);
-                Console.WriteLine("Latest: {0}", ms);
-                Console.WriteLine("Average: {0}", average);
+                Log.Write(String.Format("Updates: {0}", times.Count));
+                Log.Write(String.Format("Latest: {0}", ms));
+                Log.Write(String.Format("Average: {0}", average));
             }
 
             times.Add(ms);

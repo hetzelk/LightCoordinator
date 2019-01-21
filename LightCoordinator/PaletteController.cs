@@ -28,6 +28,17 @@ namespace LightCoordinator
             return color;
         }
 
+        public static JArray ToJArray(List<LCColor> palette)
+        {
+            JArray jarray = new JArray();
+            foreach (LCColor color in palette)
+            {
+                jarray.Add(color.HSBJO);
+            }
+
+            return jarray;
+        }
+
         public static JArray RandomPalette(int count,
             int minHue = 1000,
             int maxHue = 1000,

@@ -10,13 +10,13 @@ namespace LightCoordinator.Model
 {
     public class LCColor
     {
-        private int h { get; set; }
-        private int s { get; set; }
-        private int v { get; set; }
+        public int h { get; set; }
+        public int s { get; set; }
+        public int v { get; set; }
 
-        private int r { get; set; }
-        private int g { get; set; }
-        private int b { get; set; }
+        public int r { get; set; }
+        public int g { get; set; }
+        public int b { get; set; }
 
         public LCColor(Color color)
         {
