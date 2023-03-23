@@ -12,6 +12,7 @@ namespace LightCoordinator.Model
         public string port { get; set; }
         public string auth_token { get; set; }
         public string url { get; set; }
+        public string name { get; set; }
 
         public Nanoleaf(string ip, string port)
         {
